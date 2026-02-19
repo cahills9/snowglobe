@@ -2,3 +2,5 @@
 logs
 data
 secrets
+.venv/
+__pycache__/
