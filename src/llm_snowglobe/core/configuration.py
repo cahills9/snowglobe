@@ -17,7 +17,7 @@
 from ruamel.yaml import YAML
 
 class Configuration:
-  VALID_SOURCES = ["llamacpp", "azure", "openai"]
+  VALID_SOURCES = ["llamacpp", "azure", "openai", "ollama"]
 
   def __init__(self, config_path="/config/game.yaml"):
     self.config_path = config_path
@@ -64,3 +64,5 @@ class Configuration:
 
       for advisor in file_config['advisors']:
           self.advisors[advisor] = file_config['advisors'][advisor]
+
+      self.ai_only = file_config.get('ai_only', False)

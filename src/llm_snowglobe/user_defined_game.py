@@ -122,6 +122,7 @@ class UserDefinedGame(Control):
       self.logger.info(f"Adding AI advisor {name} to game {self.ioid}")
       self.advisors.append(sg_advisor)
     
+    self.ai_only = config.ai_only
     self.scenario = config.scenario
     self.moves = config.moves
     self.timestep = config.timestep
@@ -199,21 +200,13 @@ class UserDefinedGame(Control):
       advisor.active = False
 
   async def __call__(self):
-    # try:
-    async with asyncio.TaskGroup() as group:
-      for advisor in self.advisors:
-        group.create_task(advisor.chat_session(advisor.chatroom, history=self.history))
-      group.create_task(self.game())
-    # except* TerminateChats:
-    #   self.logger.info("Terminate chats exception caught")
-    #   time.sleep(3)
-      
-     
-    # self.tasks.append()
-    # await asyncio.gather(*self.tasks)
-    # await asyncio.gather(*[advisor.chat_session(advisor.chatroom,
-    #                                             history=self.history)
-    #                        for advisor in self.advisors], self.game())
+    if self.ai_only:
+      await self.game()
+    else:
+      async with asyncio.TaskGroup() as group:
+        for advisor in self.advisors:
+          group.create_task(advisor.chat_session(advisor.chatroom, history=self.history))
+        group.create_task(self.game())
 
 
 def configure_logging(log_file):
