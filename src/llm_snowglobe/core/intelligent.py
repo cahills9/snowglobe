@@ -170,13 +170,13 @@ class Intelligent:
                     output = chain.invoke(variables)
                 else:
                     output = await chain.ainvoke(variables)
-                if self.llm.source in ["openai", "azure"]:
+                if self.llm.source in ["openai", "azure", "ollama"]:
                     output = output.content
                 output = output.strip()
             else:
 
                 def handle(chunk):
-                    if self.llm.source in ["openai", "azure"]:
+                    if self.llm.source in ["openai", "azure", "ollama"]:
                         chunk = chunk.content
                     print(chunk, end="", flush=True)
                     return chunk

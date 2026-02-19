@@ -114,7 +114,7 @@ class LLM:
         self.embed = embed if embed is not None else False
         self.verbosity = verbosity
 
-        if self.source not in ["openai", "azure"]:
+        if self.source not in ["openai", "azure", "ollama"]:
             options = read_yaml(self.menu)
             # When using the default model and standard menu path,
             # if the model is not found then auto-install it.
@@ -226,6 +226,23 @@ class LLM:
                     langchain_huggingface.embeddings.HuggingFaceEmbeddings(
                         model_name=self.model_path, show_progress=True
                     )
+                )
+
+        elif self.source == "ollama":
+
+            # Model Source: Ollama (Local, OpenAI-compatible API)
+            options = read_yaml(self.menu)
+            base_url = "http://localhost:11434/v1"
+            if self.source in options and self.model in options[self.source]:
+                cfg = options[self.source][self.model]
+                if isinstance(cfg, dict) and "base_url" in cfg:
+                    base_url = cfg["base_url"]
+            if self.gen:
+                self.llm = langchain_openai.ChatOpenAI(
+                    model_name=self.model,
+                    base_url=base_url,
+                    api_key="ollama",
+                    streaming=True,
                 )
 
         self.bound = {}
