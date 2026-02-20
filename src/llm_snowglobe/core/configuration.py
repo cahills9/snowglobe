@@ -17,7 +17,7 @@
 from ruamel.yaml import YAML
 
 class Configuration:
-  VALID_SOURCES = ["llamacpp", "azure", "openai", "ollama"]
+  VALID_SOURCES = ["llamacpp", "azure", "openai", "ollama", "google"]
 
   def __init__(self, config_path="/config/game.yaml"):
     self.config_path = config_path
@@ -66,3 +66,45 @@ class Configuration:
           self.advisors[advisor] = file_config['advisors'][advisor]
 
       self.ai_only = file_config.get('ai_only', False)
+
+  @classmethod
+  def from_dict(cls, config_dict):
+    """Construct a Configuration from a merged dict instead of a file path."""
+    obj = cls.__new__(cls)
+    obj.config_path = None
+    obj.data_dir = config_dict['data_directory']
+    obj.game_id_file = config_dict['game_id_file']
+
+    source = config_dict.get('source')
+    obj.source = source if source in cls.VALID_SOURCES else None
+    obj.model = config_dict.get('model')
+
+    obj.goals = config_dict['goals']
+    obj.title = config_dict['title']
+    obj.scenario = config_dict['scenario']
+
+    obj.infodocs = dict()
+    if 'infodocs' in config_dict:
+      for doc in config_dict['infodocs']:
+        infodoc = config_dict['infodocs'][doc]
+        obj.infodocs[doc] = {
+          'title': doc,
+          'format': infodoc['format'],
+          'content': infodoc['content'],
+        }
+
+    obj.moves = config_dict['moves']
+    obj.timestep = config_dict['timestep']
+    obj.nature = config_dict['nature']
+    obj.mode = config_dict['mode']
+
+    obj.players = dict()
+    for player in config_dict['players']:
+      obj.players[player] = config_dict['players'][player]
+
+    obj.advisors = dict()
+    for advisor in config_dict.get('advisors', {}):
+      obj.advisors[advisor] = config_dict['advisors'][advisor]
+
+    obj.ai_only = config_dict.get('ai_only', False)
+    return obj

@@ -18,6 +18,7 @@ import uuid
 import logging
 import asyncio
 import argparse
+import time
 
 from llm_snowglobe.core import Configuration, Control, Database, History, Player
 
@@ -89,15 +90,14 @@ class UserDefinedGame(Control):
         sg_player.infodocs = infodocs
       elif cfg_player['kind'] == 'ai': #player is ai
         persona = cfg_player['persona']
-        persona_goals = list()
-        for g in cfg_player['goals']:
-          persona_goals.append(self.goals[g])
+        persona_goals = [self.goals[g] for g in cfg_player['goals']]
+        goals_text = ' '.join(persona_goals)
         sg_player = Player(
           database=self.db,
           verbosity = self.verbosity,
           llm=self.llm,
           name=name,
-          persona=f"{persona}.  {persona_goals}"
+          persona=f"{persona} {goals_text}"
         )
       else:
         self.logger.warning(f"Skipping player {name} with invalid type {cfg_player['kind']}")
@@ -109,15 +109,14 @@ class UserDefinedGame(Control):
     for name in config.advisors:
       cfg_advisor = config.advisors[name]
       persona = cfg_advisor['persona']
-      persona_goals = list()
-      for g in cfg_advisor['goals']:
-        persona_goals.append(self.goals[g])
+      persona_goals = [self.goals[g] for g in cfg_advisor['goals']]
+      goals_text = ' '.join(persona_goals)
       sg_advisor = Player(
         database=self.db,
         verbosity = self.verbosity,
         llm=self.llm,
         name=name,
-        persona=f"{persona}.  {persona_goals}")
+        persona=f"{persona}. {goals_text}")
       sg_advisor.chatroom = chatroom
       self.logger.info(f"Adding AI advisor {name} to game {self.ioid}")
       self.advisors.append(sg_advisor)
@@ -160,7 +159,9 @@ class UserDefinedGame(Control):
             player.name), 'markdown')
 
     # Moves
+    game_start = time.monotonic()
     for move in range(self.moves):
+      move_start = time.monotonic()
       self.logger.info(f"Taking move number {move}")
       self.header('Move ' + str(move + 1), h=1)
       responses = History()
@@ -182,17 +183,25 @@ class UserDefinedGame(Control):
       outcome = await self.adjudicate(
         history=self.history, responses=responses, nature=self.nature,
         timestep=self.timestep, mode=self.mode)
-      self.logger.info(f"Results for move {move} of game {self.ioid} successfully adjudicated. Recording narration.")
+      move_elapsed = time.monotonic() - move_start
+      self.logger.info(
+        f"Move {move} complete | game={self.ioid} | duration={move_elapsed:.2f}s"
+      )
       self.record_narration(outcome, timestep=self.timestep)
 
     # Conclusion
+    game_elapsed = time.monotonic() - game_start
     for player in self.players:
       if player.kind == 'human':
         content = await self.history[-1].textonly() \
           + '\n\n**Game Over**'
         self.interface_send_message(
           player.gameroom, content, 'markdown')
-        self.logger.info(f"Game {self.ioid} complete.")
+    self.logger.info(
+      f"Game complete | game={self.ioid} | moves={self.moves} | "
+      f"total_duration={game_elapsed:.2f}s | "
+      f"avg_move={game_elapsed / max(self.moves, 1):.2f}s"
+    )
 
     self.logger.info("Terminating advisor chats.")
 

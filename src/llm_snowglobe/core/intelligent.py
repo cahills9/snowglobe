@@ -141,11 +141,25 @@ class Intelligent:
         llm = llm.bind_tools(tools)
         mind = langgraph.prebuilt.create_react_agent(llm, tools)
         context = {"role": "user", "content": prompt.format(**variables)}
+
+        prompt_chars = len(prompt.format(**variables))
+        t_start = time.monotonic()
+
         if self.verbosity >= 5:
             langchain_debug = langchain.globals.get_debug()
             langchain.globals.set_debug(True)
         response = await mind.ainvoke({"messages": context})
         output = response["messages"][-1].text()
+
+        elapsed = time.monotonic() - t_start
+        caller = self.name or "unknown"
+        if self.logger:
+            self.logger.info(
+                f"LLM reasoning call | caller={caller} | source={self.llm.source} | "
+                f"model={self.llm.model} | prompt_chars={prompt_chars} | "
+                f"response_chars={len(output)} | duration={elapsed:.2f}s"
+            )
+
         if self.verbosity >= 5:
             langchain.globals.set_debug(langchain_debug)
         elif self.verbosity >= 3:
@@ -164,19 +178,24 @@ class Intelligent:
             print("v" * 80)
             print(prompt.format(**variables))
             print("^" * 80)
+
+        prompt_text = prompt.format(**variables)
+        prompt_chars = len(prompt_text)
+        t_start = time.monotonic()
+
         for i in range(max_tries):
             if not self.verbosity >= 1 or self.llm.source == "huggingface":
                 if hasattr(self.llm, "serial") and self.llm.serial:
                     output = chain.invoke(variables)
                 else:
                     output = await chain.ainvoke(variables)
-                if self.llm.source in ["openai", "azure", "ollama"]:
+                if self.llm.source in ["openai", "azure", "ollama", "google"]:
                     output = output.content
                 output = output.strip()
             else:
 
                 def handle(chunk):
-                    if self.llm.source in ["openai", "azure", "ollama"]:
+                    if self.llm.source in ["openai", "azure", "ollama", "google"]:
                         chunk = chunk.content
                     print(chunk, end="", flush=True)
                     return chunk
@@ -191,6 +210,17 @@ class Intelligent:
                 output = output.strip()
             if len(output) > 0:
                 break
+
+        elapsed = time.monotonic() - t_start
+        response_chars = len(output)
+        caller = self.name or "unknown"
+        if self.logger:
+            self.logger.info(
+                f"LLM call | caller={caller} | source={self.llm.source} | "
+                f"model={self.llm.model} | prompt_chars={prompt_chars} | "
+                f"response_chars={response_chars} | duration={elapsed:.2f}s | "
+                f"retries={i}"
+            )
         if self.verbosity >= 1:
             print()
         return output

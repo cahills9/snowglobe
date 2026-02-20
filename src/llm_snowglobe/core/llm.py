@@ -24,6 +24,7 @@ import urllib.request
 import yaml
 
 import langchain_openai
+import langchain_google_genai
 import langchain_huggingface
 import langchain_community.llms
 import langchain_community.embeddings
@@ -114,7 +115,7 @@ class LLM:
         self.embed = embed if embed is not None else False
         self.verbosity = verbosity
 
-        if self.source not in ["openai", "azure", "ollama"]:
+        if self.source not in ["openai", "azure", "ollama", "google"]:
             options = read_yaml(self.menu)
             # When using the default model and standard menu path,
             # if the model is not found then auto-install it.
@@ -242,6 +243,22 @@ class LLM:
                     model_name=self.model,
                     base_url=base_url,
                     api_key="ollama",
+                    streaming=True,
+                )
+
+        elif self.source == "google":
+
+            # Model Source: Google Gemini (Cloud)
+            # Reads GOOGLE_API_KEY or GEMINI_API_KEY from environment
+            api_key = os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
+            if not api_key:
+                raise ValueError(
+                    "Google source requires GOOGLE_API_KEY or GEMINI_API_KEY env var"
+                )
+            if self.gen:
+                self.llm = langchain_google_genai.ChatGoogleGenerativeAI(
+                    model=self.model,
+                    google_api_key=api_key,
                     streaming=True,
                 )
 
