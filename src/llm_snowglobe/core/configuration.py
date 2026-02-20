@@ -66,6 +66,8 @@ class Configuration:
           self.advisors[advisor] = file_config['advisors'][advisor]
 
       self.ai_only = file_config.get('ai_only', False)
+      self.daily_cost_cap = file_config.get('daily_cost_cap')
+      self.total_cost_cap = file_config.get('total_cost_cap')
 
   @classmethod
   def from_dict(cls, config_dict):
@@ -107,4 +109,6 @@ class Configuration:
       obj.advisors[advisor] = config_dict['advisors'][advisor]
 
     obj.ai_only = config_dict.get('ai_only', False)
+    obj.daily_cost_cap = config_dict.get('daily_cost_cap')
+    obj.total_cost_cap = config_dict.get('total_cost_cap')
     return obj

@@ -19,6 +19,7 @@ import langgraph.prebuilt
 import random
 import time
 
+from .cost_tracker import CostLimitExceeded
 from .history import History
 
 class Intelligent:
@@ -143,6 +144,12 @@ class Intelligent:
         context = {"role": "user", "content": prompt.format(**variables)}
 
         prompt_chars = len(prompt.format(**variables))
+
+        # Budget check before calling
+        tracker = getattr(self.llm, 'cost_tracker', None)
+        if tracker:
+            tracker.check_budget()
+
         t_start = time.monotonic()
 
         if self.verbosity >= 5:
@@ -158,6 +165,12 @@ class Intelligent:
                 f"LLM reasoning call | caller={caller} | source={self.llm.source} | "
                 f"model={self.llm.model} | prompt_chars={prompt_chars} | "
                 f"response_chars={len(output)} | duration={elapsed:.2f}s"
+            )
+        # Record cost
+        if tracker:
+            tracker.record(
+                self.llm.source, self.llm.model,
+                prompt_chars, len(output), elapsed
             )
 
         if self.verbosity >= 5:
@@ -181,6 +194,12 @@ class Intelligent:
 
         prompt_text = prompt.format(**variables)
         prompt_chars = len(prompt_text)
+
+        # Budget check before calling
+        tracker = getattr(self.llm, 'cost_tracker', None)
+        if tracker:
+            tracker.check_budget()
+
         t_start = time.monotonic()
 
         for i in range(max_tries):
@@ -220,6 +239,12 @@ class Intelligent:
                 f"model={self.llm.model} | prompt_chars={prompt_chars} | "
                 f"response_chars={response_chars} | duration={elapsed:.2f}s | "
                 f"retries={i}"
+            )
+        # Record cost
+        if tracker:
+            tracker.record(
+                self.llm.source, self.llm.model,
+                prompt_chars, response_chars, elapsed
             )
         if self.verbosity >= 1:
             print()
@@ -280,7 +305,7 @@ class Intelligent:
         elif isinstance(cc, str):
             destinations = [chatroom, cc]
         else:
-            destinations = [chatroom].append(cc)
+            destinations = [chatroom] + list(cc)
         for destination in destinations:
             self.db.send_message(destination, **message)
         self.db.commit()

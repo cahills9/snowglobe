@@ -14,6 +14,7 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
+import os
 import uuid
 import logging
 import asyncio
@@ -21,6 +22,7 @@ import argparse
 import time
 
 from llm_snowglobe.core import Configuration, Control, Database, History, Player
+from llm_snowglobe.core.cost_tracker import CostTracker, CostLimitExceeded
 
 
 class UserDefinedGame(Control):
@@ -54,6 +56,18 @@ class UserDefinedGame(Control):
       ioid=self.ioid,
       source=config.source,
       model=config.model
+    )
+
+    # Attach cost tracker to the shared LLM instance
+    cost_file = os.path.join(config.data_dir, 'cost_ledger.json')
+    self.llm.cost_tracker = CostTracker(
+        path=cost_file,
+        daily_cap=getattr(config, 'daily_cost_cap', None),
+        total_cap=getattr(config, 'total_cost_cap', None),
+        logger=self.logger,
+    )
+    self.logger.info(
+        f"Cost tracker loaded | {self.llm.cost_tracker.summary()}"
     )
 
     self.title = config.title
@@ -160,34 +174,45 @@ class UserDefinedGame(Control):
 
     # Moves
     game_start = time.monotonic()
-    for move in range(self.moves):
-      move_start = time.monotonic()
-      self.logger.info(f"Taking move number {move}")
-      self.header('Move ' + str(move + 1), h=1)
-      responses = History()
+    moves_completed = 0
+    try:
+      for move in range(self.moves):
+        move_start = time.monotonic()
+        self.logger.info(f"Taking move number {move}")
+        self.header('Move ' + str(move + 1), h=1)
+        responses = History()
+        for player in self.players:
+          self.header('### ' + player.name, h=2)
+          if player.kind == 'human':
+            content = await self.history[-1].textonly() \
+              + '\n\n**How do you respond?**'
+            self.interface_send_message(
+              player.gameroom, content, 'markdown')
+            response = await player.interface_get_message(player.gameroom)
+            self.logger.info(f"Response received from player {player.name} in {player.gameroom}")
+          else:
+            response = await player.respond(history=self.history)
+            self.logger.info(f"Response received from AI player {player.name}")
+          responses.add(player.name, response)
+        self.header('### Result', h=2)
+        self.logger.info(f"Adjudicating results for move {move} of game {self.ioid}")
+        outcome = await self.adjudicate(
+          history=self.history, responses=responses, nature=self.nature,
+          timestep=self.timestep, mode=self.mode)
+        move_elapsed = time.monotonic() - move_start
+        self.logger.info(
+          f"Move {move} complete | game={self.ioid} | duration={move_elapsed:.2f}s"
+        )
+        self.record_narration(outcome, timestep=self.timestep)
+        moves_completed += 1
+    except CostLimitExceeded as e:
+      self.logger.warning(f"Budget exceeded, stopping game: {e}")
       for player in self.players:
-        self.header('### ' + player.name, h=2)
         if player.kind == 'human':
-          content = await self.history[-1].textonly() \
-            + '\n\n**How do you respond?**'
           self.interface_send_message(
-            player.gameroom, content, 'markdown')
-          response = player.interface_get_message(player.gameroom)
-          self.logger.info(f"Response received from player {player.name} in {player.gameroom}")
-        else:
-          response = await player.respond(history=self.history)
-          self.logger.info(f"Response received from AI player {player.name}")
-        responses.add(player.name, response)
-      self.header('### Result', h=2)
-      self.logger.info(f"Adjudicating results for move {move} of game {self.ioid}")
-      outcome = await self.adjudicate(
-        history=self.history, responses=responses, nature=self.nature,
-        timestep=self.timestep, mode=self.mode)
-      move_elapsed = time.monotonic() - move_start
-      self.logger.info(
-        f"Move {move} complete | game={self.ioid} | duration={move_elapsed:.2f}s"
-      )
-      self.record_narration(outcome, timestep=self.timestep)
+            player.gameroom,
+            f'**Game stopped: spending limit reached.**\n\n{e}',
+            'markdown')
 
     # Conclusion
     game_elapsed = time.monotonic() - game_start
@@ -198,9 +223,9 @@ class UserDefinedGame(Control):
         self.interface_send_message(
           player.gameroom, content, 'markdown')
     self.logger.info(
-      f"Game complete | game={self.ioid} | moves={self.moves} | "
+      f"Game complete | game={self.ioid} | moves={moves_completed}/{self.moves} | "
       f"total_duration={game_elapsed:.2f}s | "
-      f"avg_move={game_elapsed / max(self.moves, 1):.2f}s"
+      f"avg_move={game_elapsed / max(moves_completed, 1):.2f}s"
     )
 
     self.logger.info("Terminating advisor chats.")

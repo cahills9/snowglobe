@@ -263,3 +263,4 @@ class LLM:
                 )
 
         self.bound = {}
+        self.cost_tracker = None  # Set by game constructor if budget enforcement is needed

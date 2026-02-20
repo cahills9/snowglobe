@@ -102,6 +102,12 @@ def main(host="0.0.0.0", port=8000):
             path = e.value
             if not path:
                 return
+            # Validate path stays under scenarios directory
+            real_path = os.path.realpath(path)
+            real_dir = os.path.realpath(scenarios_dir)
+            if not real_path.startswith(real_dir + os.sep):
+                ui.notify('Invalid scenario path.', type='negative')
+                return
             scenario_data = load_scenario(path)
 
             # Update preview

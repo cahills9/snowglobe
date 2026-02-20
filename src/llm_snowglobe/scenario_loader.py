@@ -50,6 +50,10 @@ def merge_config(template, infra, user_choices):
     config['game_id_file'] = infra['game_id_file']
     config['source'] = infra.get('source')
     config['model'] = infra.get('model')
+    if 'daily_cost_cap' in infra:
+        config['daily_cost_cap'] = infra['daily_cost_cap']
+    if 'total_cost_cap' in infra:
+        config['total_cost_cap'] = infra['total_cost_cap']
 
     # Apply role assignments — human players get sequential IDs (PlayerA, PlayerB, ...)
     roles = user_choices.get('roles', {})
@@ -58,7 +62,10 @@ def merge_config(template, infra, user_choices):
         kind = roles.get(player_name, 'ai')
         player_cfg['kind'] = kind
         if kind == 'human':
-            label = 'Player' + string.ascii_uppercase[human_index]
+            if human_index < 26:
+                label = 'Player' + string.ascii_uppercase[human_index]
+            else:
+                label = 'Player' + str(human_index + 1)
             player_cfg['ioid'] = label
             human_index += 1
 
